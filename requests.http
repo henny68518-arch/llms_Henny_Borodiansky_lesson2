@@ -4,9 +4,7 @@ content-type: application/json
 {
     "model": "gpt-4o-mini",
     "messages": [
-        { "role": "user", "content": "טקסט לדוגמה" },
-        { "role": "assistant", "content": "טקסט לדוגמה" },
-        { "role": "user", "content": "טקסט לדוגמה" }
+        { "role": "user", "content": "def greet(name):\n    return \"שלום \" + name" }
     ]
 }
 

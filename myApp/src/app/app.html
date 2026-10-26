@@ -4,85 +4,188 @@
   <header class="masthead">
     <div class="masthead__left">
       <span class="pill">
-        <span class="pill__dot" [class.pill__dot--busy]="isSending()"></span>
-        {{ isSending() ? 'ממתין לתשובה' : 'פעיל' }}
+        <span class="pill__dot" [class.pill__dot--busy]="isSending() || isGrading()"></span>
+        {{ isSending() || isGrading() ? 'בודק...' : 'פעיל' }}
       </span>
-      <span class="masthead__sep"></span>
-      <span class="masthead__count">{{ messages().length }} הודעות</span>
     </div>
 
     <div class="masthead__center">
-      <h1 class="masthead__title">חדר השיחות</h1>
-      <p class="masthead__subtitle">שיחה עם העוזר החכם</p>
+      <h1 class="masthead__title">בודק פונקציות בתכנות</h1>
+      <p class="masthead__subtitle">
+        {{ mode() === 'chat' ? 'שיחה עם בודק התרגילים' : 'ציון, משוב והצעות לשיפור' }}
+      </p>
+      <div class="mode-switch" role="group" aria-label="בחירת מצב עבודה">
+        <button
+          type="button"
+          class="mode-switch__button"
+          [class.mode-switch__button--active]="mode() === 'chat'"
+          [attr.aria-pressed]="mode() === 'chat'"
+          [disabled]="isSending() || isGrading()"
+          (click)="setMode('chat')"
+        >צ׳אט</button>
+        <button
+          type="button"
+          class="mode-switch__button"
+          [class.mode-switch__button--active]="mode() === 'program'"
+          [attr.aria-pressed]="mode() === 'program'"
+          [disabled]="isSending() || isGrading()"
+          (click)="setMode('program')"
+        >בדיקת תרגיל</button>
+      </div>
     </div>
 
     <div class="masthead__right">
-      <button type="button" class="ghost-btn" (click)="clear()" [disabled]="isSending()">
-        התחל מחדש
-      </button>
+      @if (mode() === 'chat') {
+        <button type="button" class="ghost-btn" (click)="clear()" [disabled]="isSending()">
+          התחל מחדש
+        </button>
+      }
     </div>
   </header>
 
-  <main class="stream">
-    <div class="stream__inner">
-      @for (message of messages(); track $index; let i = $index) {
-        <div class="msg" [class.msg--user]="message.role === 'user'"
-             [class.msg--assistant]="message.role === 'assistant'">
-          <div class="msg__head">
-            <span class="msg__badge">{{ message.role === 'user' ? 'א' : 'ע' }}</span>
-            <span class="msg__name">{{ message.role === 'user' ? 'אתה' : 'העוזר' }}</span>
-            <span class="msg__num">#{{ i + 1 }}</span>
-          </div>
+  @if (mode() === 'chat') {
+    <main #chatStream class="stream">
+      <div class="stream__inner">
+        <p class="start__hint chat__privacy-note">
+          כתבו או הדביקו פונקציה בשפת תכנות כלשהי כדי לקבל ציון, משוב והצעה לשיפור. כל הודעה מקבלת בדיקה משלה; הודעות קודמות נשארות כאן בצ׳אט, אך אינן נשלחות שוב לשרת.
+        </p>
+        @for (message of messages(); track $index; let i = $index) {
+          <div class="msg" [class.msg--user]="message.role === 'user'"
+               [class.msg--assistant]="message.role === 'assistant'">
+            <div class="msg__head">
+              <span class="msg__badge">{{ message.role === 'user' ? 'א' : 'ע' }}</span>
+              <span class="msg__name">{{ message.role === 'user' ? 'אתה' : 'בודק התרגיל' }}</span>
+              <span class="msg__num">#{{ i + 1 }}</span>
+            </div>
 
-          <div class="msg__bubble">
-            @if (message.text) {
-              <p class="msg__text">{{ message.text }}</p>
-            } @else {
-              <span class="typing">
-                <span></span><span></span><span></span>
-              </span>
-            }
+            <div class="msg__bubble">
+              @if (message.text) {
+                <p class="msg__text">{{ message.text }}</p>
+              } @else if (isSending()) {
+                <span class="typing">
+                  <span></span><span></span><span></span>
+                </span>
+              } @else {
+                <p class="msg__text">לא התקבלה תשובה.</p>
+              }
+            </div>
           </div>
-        </div>
-      } @empty {
-        <div class="start">
-          <div class="start__ring" aria-hidden="true"></div>
-          <p class="start__title">מוכן לשיחה</p>
-          <p class="start__hint">כתוב את ההודעה הראשונה בתיבה שלמטה.</p>
+        } @empty {
+          <div class="start">
+            <div class="start__ring" aria-hidden="true"></div>
+            <p class="start__title">מוכן לבדוק את הפונקציה שלך</p>
+            <p class="start__hint">הדבק פונקציה שכתבת בשפת תכנות כלשהי, וקבל ציון, משוב והצעה לשיפור.</p>
+          </div>
+        }
+      </div>
+    </main>
+
+    <div class="foot">
+      @if (errorText()) {
+        <div class="error">
+          <span class="error__dot"></span>
+          <span class="error__text">{{ errorText() }}</span>
         </div>
       }
+
+      <form class="composer" (ngSubmit)="send()">
+        <div class="composer__box">
+          <textarea
+            #draftInput
+            class="composer__input"
+            name="draft"
+            rows="1"
+            [ngModel]="draft()"
+            (ngModelChange)="setDraft($event)"
+            (keydown)="onKeydown($event)"
+            placeholder="כתוב כאן את הפונקציה שלך... (Enter לשליחה, Shift+Enter לשורה חדשה)"
+            autocomplete="off"
+            [disabled]="isSending()"
+          ></textarea>
+          <button type="submit" class="composer__btn" [disabled]="isSending() || !draft().trim()">
+            <span>{{ isSending() ? 'שולח' : 'שלח' }}</span>
+            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+              <path d="M21 12 3 4l3.5 8L3 20z" />
+            </svg>
+          </button>
+        </div>
+      </form>
     </div>
-  </main>
-
-  <div class="foot">
-    @if (errorText()) {
-      <div class="error">
-        <span class="error__dot"></span>
-        <span class="error__text">{{ errorText() }}</span>
-      </div>
-    }
-
-    <form class="composer" (ngSubmit)="send()">
-      <div class="composer__box">
+  } @else {
+    <main class="program">
+      <form class="program__form" (ngSubmit)="submitSolution()">
+        <p class="program__instructions">
+          כתבו את הפתרון שלכם כפונקציה בשפת תכנות כלשהי. הבדיקה תבחן אם הפתרון בנוי כפונקציה תקינה.
+        </p>
+        <label class="program__label" for="solution">הפתרון שלך</label>
         <textarea
-          #draftInput
-          class="composer__input"
-          name="draft"
-          rows="1"
-          [ngModel]="draft()"
-          (ngModelChange)="setDraft($event)"
-          (keydown)="onKeydown($event)"
-          placeholder="כתוב כאן את ההודעה שלך... (Enter לשליחה, Shift+Enter לשורה חדשה)"
+          id="solution"
+          class="program__input"
+          name="solution"
+          rows="10"
+          [ngModel]="solution()"
+          (ngModelChange)="setSolution($event)"
+          placeholder="כתוב כאן את הפונקציה שכתבת..."
           autocomplete="off"
-          [disabled]="isSending()"
+          [disabled]="isGrading()"
+          required
         ></textarea>
-        <button type="submit" class="composer__btn" [disabled]="isSending() || !draft().trim()">
-          <span>{{ isSending() ? 'שולח' : 'שלח' }}</span>
-          <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
-            <path d="M21 12 3 4l3.5 8L3 20z" />
-          </svg>
-        </button>
-      </div>
-    </form>
-  </div>
+        <div class="program__actions">
+          <button
+            type="submit"
+            class="composer__btn program__submit"
+            [disabled]="
+              isGrading() ||
+              !solution().trim() ||
+              solution().trim() === lastSubmittedSolution()
+            "
+          >{{ isGrading() ? 'בודק...' : 'שלח לבדיקה' }}</button>
+          <button
+            type="button"
+            class="program__reset"
+            [disabled]="isGrading()"
+            (click)="resetSolution()"
+          >איפוס</button>
+        </div>
+      </form>
+
+      @if (errorText()) {
+        <div class="error" role="alert">
+          <span class="error__dot"></span>
+          <span class="error__text">{{ errorText() }}</span>
+        </div>
+      }
+
+      @if (isGrading()) {
+        <p class="program__loading" role="status">הפתרון נשלח לבדיקה...</p>
+      }
+
+      @if (gradeProgress(); as result) {
+        @if (result.complete && result.score !== null && result.feedbackComplete && result.suggestionsComplete) {
+          <section class="program__results" aria-live="polite" aria-label="תוצאות הבדיקה">
+            <div class="program__result program__result--score">
+              <h2>ציון</h2>
+              <p>{{ result.score }}%</p>
+            </div>
+            <div class="program__result">
+              <h2>משוב</h2>
+              <p>{{ result.feedback }}</p>
+            </div>
+            <div class="program__result">
+              <h2>הצעות לשיפור</h2>
+              @if (result.suggestions.length) {
+                <ul>
+                  @for (suggestion of result.suggestions; track $index) {
+                    <li>{{ suggestion }}</li>
+                  }
+                </ul>
+              } @else {
+                <p>אין הצעות לשיפור.</p>
+              }
+            </div>
+          </section>
+        }
+      }
+    </main>
+  }
 </div>
